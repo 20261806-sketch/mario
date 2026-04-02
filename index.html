@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>마리오 점프 게임 🍄</title>
+    <title>파이어 마리오 점프 게임 🔥🍄</title>
     <style>
         body {
             margin: 0;
@@ -13,7 +13,7 @@
             align-items: center;
             justify-content: center;
             height: 100vh;
-            background-color: #5C94FC; /* 마리오 하늘색 */
+            background-color: #5C94FC;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             overflow: hidden;
             user-select: none;
@@ -24,323 +24,11 @@
         }
         canvas {
             background-color: #5C94FC;
-            border-bottom: 40px solid #c84c0c; /* 벽돌 바닥 느낌 */
+            border-bottom: 40px solid #c84c0c;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             border-radius: 5px 5px 0 0;
             display: block;
         }
-        /* 바닥 무늬 추가 */
-        #game-wrapper::after {
-            content: '';
-            position: absolute;
-            bottom: -40px;
-            left: 0;
-            width: 100%;
-            height: 40px;
-            background-image: linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), 
-                              linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000);
-            background-size: 20px 20px;
-            background-position: 0 0, 10px 10px;
-            opacity: 0.1;
-            pointer-events: none;
-        }
-        #scoreBoard {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            font-size: 24px;
-            font-weight: bold;
-            color: white;
-            text-shadow: 2px 2px 0 #000;
-        }
-        #gameOverScreen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            display: none;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            z-index: 10;
-        }
-        #gameOverScreen h2 { font-size: 40px; margin: 0 0 20px 0; color: #ffeb3b; text-shadow: 2px 2px 0 #000;}
-        #restartBtn {
-            padding: 10px 30px;
-            font-size: 20px;
-            font-weight: bold;
-            cursor: pointer;
-            background-color: #e52521; /* 마리오 레드 */
-            color: white;
-            border: 2px solid white;
-            border-radius: 5px;
-            transition: transform 0.1s;
-        }
-        #restartBtn:active { transform: scale(0.95); }
-        .instructions { margin-top: 20px; color: white; font-weight: bold; text-shadow: 1px 1px 0 #000;}
-    </style>
-</head>
-<body>
-
-    <h1>점프 게임 🍄</h1>
-    
-    <div id="game-wrapper">
-        <div id="scoreBoard">점수: <span id="score">0</span></div>
-        <canvas id="gameCanvas" width="800" height="300"></canvas>
-        
-        <div id="gameOverScreen">
-            <h2>게임 오버!</h2>
-            <button id="restartBtn" onclick="resetGame()">다시 하기</button>
-        </div>
-    </div>
-    
-    <div class="instructions">
-        [스페이스바] 또는 [마우스 클릭]으로 점프하세요!
-    </div>
-
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const scoreElement = document.getElementById('score');
-        const gameOverScreen = document.getElementById('gameOverScreen');
-
-        // 게임 물리 및 설정
-        let frame = 0;
-        let score = 0;
-        let gameSpeed = 6;
-        let isGameOver = false;
-        let animationId;
-
-        // 플레이어 (마리오)
-        const player = {
-            x: 50,
-            y: 200,
-            width: 30,
-            height: 40,
-            dy: 0,
-            jumpPower: -12,
-            gravity: 0.6,
-            grounded: false
-        };
-
-        // 장애물 (토관)
-        let obstacles = [];
-
-        function drawPlayer() {
-            // 간단한 도트 느낌의 마리오 그리기
-            const x = player.x;
-            const y = player.y;
-            const w = player.width;
-            const h = player.height;
-
-            // 모자 (빨강)
-            ctx.fillStyle = '#e52521';
-            ctx.fillRect(x, y, w, h * 0.3);
-            ctx.fillRect(x + w, y + h * 0.1, w * 0.3, h * 0.1); // 모자 챙
-
-            // 얼굴 (살구색)
-            ctx.fillStyle = '#ffcca6';
-            ctx.fillRect(x, y + h * 0.3, w, h * 0.3);
-
-            // 콧수염
-            ctx.fillStyle = 'black';
-            ctx.fillRect(x + w * 0.5, y + h * 0.45, w * 0.6, h * 0.1);
-
-            // 멜빵바지 (파랑)
-            ctx.fillStyle = '#00439c';
-            ctx.fillRect(x, y + h * 0.6, w, h * 0.4);
-
-            // 팔 (빨강)
-            ctx.fillStyle = '#e52521';
-            ctx.fillRect(x - w * 0.2, y + h * 0.6, w * 0.3, h * 0.2);
-        }
-
-        function drawObstacles() {
-            for (let i = 0; i < obstacles.length; i++) {
-                let obs = obstacles[i];
-                obs.x -= gameSpeed; // 왼쪽으로 이동
-
-                // 토관 그리기
-                ctx.fillStyle = '#00a800'; // 토관 초록색
-                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-                
-                // 토관 입구 (조금 더 넓게)
-                ctx.fillStyle = '#00a800';
-                ctx.fillRect(obs.x - 5, obs.y, obs.width + 10, 20);
-
-                // 토관 테두리선
-                ctx.strokeStyle = 'black';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
-                ctx.strokeRect(obs.x - 5, obs.y, obs.width + 10, 20);
-                
-                // 토관 하이라이트 (입체감)
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.fillRect(obs.x + 5, obs.y, 5, obs.height);
-
-                // 충돌 검사 (AABB)
-                if (player.x < obs.x + obs.width &&
-                    player.x + player.width > obs.x &&
-                    player.y < obs.y + obs.height &&
-                    player.y + player.height > obs.y) {
-                    isGameOver = true;
-                }
-            }
-
-            // 화면 밖으로 나간 토관 제거 및 점수 획득
-            if (obstacles.length > 0 && obstacles[0].x + obstacles[0].width < 0) {
-                obstacles.shift();
-                score += 100;
-                scoreElement.innerText = score;
-                // 점수가 오를수록 속도 약간씩 증가
-                if (score % 500 === 0) gameSpeed += 0.5;
-            }
-        }
-
-        function spawnObstacle() {
-            // 프레임에 맞춰 무작위로 토관 생성
-            if (frame % 90 === 0 || (frame % 60 === 0 && Math.random() < 0.3)) {
-                let minHeight = 30;
-                let maxHeight = 80;
-                let height = Math.floor(Math.random() * (maxHeight - minHeight + 1) + minHeight);
-                
-                // 이전 토관과 너무 가깝지 않게 조정
-                if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length - 1].x > 200) {
-                    obstacles.push({
-                        x: canvas.width,
-                        y: canvas.height - height,
-                        width: 40,
-                        height: height
-                    });
-                }
-            }
-        }
-
-        function drawClouds() {
-            // 배경 장식용 구름
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-            let cloudX1 = (canvas.width - (frame * 0.5) % (canvas.width + 200)) + 100;
-            let cloudX2 = (canvas.width - (frame * 0.3) % (canvas.width + 300)) + 400;
-
-            // 구름 1
-            ctx.fillRect(cloudX1, 50, 60, 20);
-            ctx.fillRect(cloudX1 + 10, 40, 40, 40);
-            // 구름 2
-            ctx.fillRect(cloudX2, 80, 80, 25);
-            ctx.fillRect(cloudX2 + 15, 65, 50, 50);
-        }
-
-        function updatePlayer() {
-            // 중력 적용
-            player.y += player.dy;
-            
-            // 바닥 충돌 검사
-            if (player.y + player.height >= canvas.height) {
-                player.y = canvas.height - player.height;
-                player.dy = 0;
-                player.grounded = true;
-            } else {
-                player.dy += player.gravity; // 공중에 있으면 중력 가속도 추가
-                player.grounded = false;
-            }
-        }
-
-        function jump() {
-            if (player.grounded && !isGameOver) {
-                player.dy = player.jumpPower;
-                player.grounded = false;
-            }
-        }
-
-        // 입력 이벤트 리스너
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' || e.code === 'ArrowUp') {
-                jump();
-            }
-        });
-        
-        // 캔버스 클릭 시에도 점프 가능 (모바일 호환)
-        canvas.addEventListener('mousedown', jump);
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            jump();
-        });
-
-        // 게임 메인 루프
-        function animate() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            drawClouds();
-            updatePlayer();
-            drawPlayer();
-            
-            spawnObstacle();
-            drawObstacles();
-
-            frame++;
-
-            if (!isGameOver) {
-                animationId = requestAnimationFrame(animate);
-            } else {
-                gameOverScreen.style.display = 'flex';
-            }
-        }
-
-        // 게임 초기화 및 재시작
-        function resetGame() {
-            player.y = 200;
-            player.dy = 0;
-            obstacles = [];
-            score = 0;
-            frame = 0;
-            gameSpeed = 6;
-            scoreElement.innerText = score;
-            isGameOver = false;
-            gameOverScreen.style.display = 'none';
-            cancelAnimationFrame(animationId);
-            animate();
-        }
-
-        // 게임 최초 실행
-        animate();
-    </script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>마리오 점프 게임 (몬스터 추가) 🍄</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background-color: #5C94FC; /* 마리오 하늘색 */
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-            user-select: none;
-        }
-        h1 { color: white; text-shadow: 2px 2px 0 #000; margin-bottom: 10px; }
-        #game-wrapper {
-            position: relative;
-        }
-        canvas {
-            background-color: #5C94FC;
-            border-bottom: 40px solid #c84c0c; /* 벽돌 바닥 느낌 */
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            border-radius: 5px 5px 0 0;
-            display: block;
-        }
-        /* 바닥 무늬 추가 */
         #game-wrapper::after {
             content: '';
             position: absolute;
@@ -385,19 +73,20 @@
             font-size: 20px;
             font-weight: bold;
             cursor: pointer;
-            background-color: #e52521; /* 마리오 레드 */
+            background-color: #e52521;
             color: white;
             border: 2px solid white;
             border-radius: 5px;
             transition: transform 0.1s;
         }
         #restartBtn:active { transform: scale(0.95); }
-        .instructions { margin-top: 20px; color: white; font-weight: bold; text-shadow: 1px 1px 0 #000;}
+        .instructions { margin-top: 15px; color: white; font-weight: bold; text-shadow: 1px 1px 0 #000; text-align: center; line-height: 1.5;}
+        .highlight { color: #ffeb3b; }
     </style>
 </head>
 <body>
 
-    <h1>점프 게임 (몬스터!) 🍄</h1>
+    <h1>파이어 마리오 런 🔥</h1>
     
     <div id="game-wrapper">
         <div id="scoreBoard">점수: <span id="score">0</span></div>
@@ -410,7 +99,8 @@
     </div>
     
     <div class="instructions">
-        [스페이스바] 또는 [마우스 클릭]으로 점프하세요!
+        [스페이스바] 점프 <span class="highlight">(공중에서 한 번 더 누르면 이단 점프!)</span><br>
+        <span class="highlight">[Z 키]</span> 파이어볼 발사 (몬스터 공격)
     </div>
 
     <script>
@@ -419,27 +109,28 @@
         const scoreElement = document.getElementById('score');
         const gameOverScreen = document.getElementById('gameOverScreen');
 
-        // 게임 물리 및 설정
         let frame = 0;
         let score = 0;
         let gameSpeed = 6;
         let isGameOver = false;
         let animationId;
 
-        // 플레이어 (마리오)
+        // 파워업 마리오 객체
         const player = {
             x: 50,
             y: 200,
             width: 30,
             height: 40,
             dy: 0,
-            jumpPower: -12,
+            jumpPower: -11,
             gravity: 0.6,
-            grounded: false
+            grounded: false,
+            jumps: 0,       // 이단 점프를 위한 점프 횟수 기록
+            maxJumps: 2     // 최대 점프 횟수
         };
 
-        // 장애물 배열 (토관 및 몬스터 통합 관리)
         let obstacles = [];
+        let fireballs = []; // 파이어볼 배열
 
         function drawPlayer() {
             const x = player.x;
@@ -447,8 +138,10 @@
             const w = player.width;
             const h = player.height;
 
-            // 모자 (빨강)
-            ctx.fillStyle = '#e52521';
+            // 파이어 마리오 디자인 (모자: 흰색, 옷: 흰색, 멜빵: 빨강)
+            
+            // 모자 (흰색)
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(x, y, w, h * 0.3);
             ctx.fillRect(x + w, y + h * 0.1, w * 0.3, h * 0.1);
 
@@ -460,108 +153,103 @@
             ctx.fillStyle = 'black';
             ctx.fillRect(x + w * 0.5, y + h * 0.45, w * 0.6, h * 0.1);
 
-            // 멜빵바지 (파랑)
-            ctx.fillStyle = '#00439c';
+            // 멜빵바지 (빨강)
+            ctx.fillStyle = '#e52521';
             ctx.fillRect(x, y + h * 0.6, w, h * 0.4);
 
-            // 팔 (빨강)
-            ctx.fillStyle = '#e52521';
+            // 팔 (흰색)
+            ctx.fillStyle = '#ffffff';
             ctx.fillRect(x - w * 0.2, y + h * 0.6, w * 0.3, h * 0.2);
+
+            // 다리 애니메이션 (바닥에 있을 때만 움직임)
+            ctx.fillStyle = '#e52521'; // 다리 색
+            if (player.grounded) {
+                let legOffset = (Math.floor(frame / 6) % 2 === 0) ? 5 : 0;
+                // 앞다리
+                ctx.fillRect(x + w * 0.2, y + h - 5 + (5 - legOffset), w * 0.3, 5);
+                // 뒷다리
+                ctx.fillRect(x + w * 0.6, y + h - 5 + legOffset, w * 0.3, 5);
+            } else {
+                // 점프 중 다리 고정
+                ctx.fillRect(x + w * 0.2, y + h - 5, w * 0.3, 5);
+                ctx.fillRect(x + w * 0.6, y + h - 10, w * 0.3, 5);
+            }
         }
 
-        // 장애물(토관 및 몬스터) 그리기 및 충돌 검사
+        // 파이어볼 그리기 및 로직
+        function handleFireballs() {
+            for (let i = fireballs.length - 1; i >= 0; i--) {
+                let fb = fireballs[i];
+                fb.x += fb.speed; // 오른쪽으로 이동
+
+                // 불꽃 그리기 (주황/노랑)
+                ctx.beginPath();
+                ctx.arc(fb.x, fb.y, fb.radius, 0, Math.PI * 2);
+                ctx.fillStyle = (frame % 4 < 2) ? '#ff5722' : '#ffeb3b';
+                ctx.fill();
+                ctx.closePath();
+
+                // 화면 밖으로 나가면 제거
+                if (fb.x > canvas.width) {
+                    fireballs.splice(i, 1);
+                    continue;
+                }
+
+                // 몬스터와 파이어볼 충돌 검사
+                for (let j = obstacles.length - 1; j >= 0; j--) {
+                    let obs = obstacles[j];
+                    if (obs.type === 'monster') {
+                        // 간단한 원형-사각형 충돌 체크
+                        let distX = Math.abs(fb.x - obs.x - obs.width / 2);
+                        let distY = Math.abs(fb.y - obs.y - obs.height / 2);
+
+                        if (distX <= (obs.width / 2 + fb.radius) && distY <= (obs.height / 2 + fb.radius)) {
+                            // 몬스터 처치!
+                            obstacles.splice(j, 1);
+                            fireballs.splice(i, 1);
+                            score += 200; // 보너스 점수
+                            scoreElement.innerText = score;
+                            break; // 불꽃 하나당 몬스터 하나
+                        }
+                    }
+                }
+            }
+        }
+
+        // 파이어볼 발사
+        function shootFireball() {
+            if (!isGameOver && fireballs.length < 3) { // 화면에 최대 3개까지만
+                fireballs.push({
+                    x: player.x + player.width,
+                    y: player.y + player.height * 0.5,
+                    radius: 6,
+                    speed: 12
+                });
+            }
+        }
+
         function drawObstacles() {
             for (let i = 0; i < obstacles.length; i++) {
                 let obs = obstacles[i];
-                obs.x -= gameSpeed; // 왼쪽으로 이동
+                obs.x -= gameSpeed; 
 
                 if (obs.type === 'pipe') {
-                    // --- 토관 그리기 ---
-                    ctx.fillStyle = '#00a800'; // 토관 초록색
+                    // 토관
+                    ctx.fillStyle = '#00a800'; 
                     ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-                    // 토관 입구
-                    ctx.fillStyle = '#00a800';
                     ctx.fillRect(obs.x - 5, obs.y, obs.width + 10, 20);
-                    // 테두리
                     ctx.strokeStyle = 'black';
                     ctx.lineWidth = 2;
                     ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
                     ctx.strokeRect(obs.x - 5, obs.y, obs.width + 10, 20);
-                    // 하이라이트
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
                     ctx.fillRect(obs.x + 5, obs.y, 5, obs.height);
-
                 } else if (obs.type === 'monster') {
-                    // --- 몬스터(굼바 스타일) 그리기 ---
-                    const mx = obs.x;
-                    const my = obs.y;
-                    const mw = obs.width;
-                    const mh = obs.height;
-
-                    // 머리 (갈색)
-                    ctx.fillStyle = '#a52a2a'; // Brown
+                    // 몬스터
+                    const mx = obs.x, my = obs.y, mw = obs.width, mh = obs.height;
+                    ctx.fillStyle = '#a52a2a';
                     ctx.beginPath();
-                    ctx.moveTo(mx, my + mh); // 왼쪽 아래
-                    ctx.lineTo(mx + mw, my + mh); // 오른쪽 아래
-                    ctx.lineTo(mx + mw * 0.8, my); // 오른쪽 위
-                    ctx.lineTo(mx + mw * 0.2, my); // 왼쪽 위
+                    ctx.moveTo(mx, my + mh); ctx.lineTo(mx + mw, my + mh);
+                    ctx.lineTo(mx + mw * 0.8, my); ctx.lineTo(mx + mw * 0.2, my);
                     ctx.closePath();
-                    ctx.fill();
-                    ctx.strokeStyle = 'black';
-                    ctx.lineWidth = 1;
-                    ctx.stroke();
-
-                    // 눈 (흰색 + 검은 눈동자)
-                    ctx.fillStyle = 'white';
-                    ctx.fillRect(mx + mw * 0.25, my + mh * 0.2, mw * 0.2, mh * 0.3);
-                    ctx.fillRect(mx + mw * 0.55, my + mh * 0.2, mw * 0.2, mh * 0.3);
-                    ctx.fillStyle = 'black';
-                    ctx.fillRect(mx + mw * 0.3, my + mh * 0.3, mw * 0.1, mh * 0.15);
-                    ctx.fillRect(mx + mw * 0.6, my + mh * 0.3, mw * 0.1, mh * 0.15);
-
-                    // 발 (검정) - 간단한 애니메이션 효과
-                    ctx.fillStyle = 'black';
-                    let footOffset = (Math.floor(frame / 10) % 2 === 0) ? 2 : 0;
-                    ctx.fillRect(mx + mw * 0.1, my + mh - 5 + footOffset, mw * 0.3, 7);
-                    ctx.fillRect(mx + mw * 0.6, my + mh - 5 - footOffset, mw * 0.3, 7);
-                }
-
-                // --- 충돌 검사 (공통) ---
-                // 마리오의 판정 박스를 약간 줄여서 억울한 죽음 방지
-                const pHitBox = { x: player.x + 5, y: player.y + 5, w: player.width - 10, h: player.height - 5 };
-                
-                if (pHitBox.x < obs.x + obs.width &&
-                    pHitBox.x + pHitBox.w > obs.x &&
-                    pHitBox.y < obs.y + obs.height &&
-                    pHitBox.y + pHitBox.h > obs.y) {
-                    isGameOver = true;
-                }
-            }
-
-            // 화면 밖으로 나간 장애물 제거 및 점수 획득
-            if (obstacles.length > 0 && obstacles[0].x + obstacles[0].width < -10) {
-                obstacles.shift();
-                score += 100;
-                scoreElement.innerText = score;
-                // 난이도 상승
-                if (score % 1000 === 0) gameSpeed += 0.5;
-            }
-        }
-
-        // 장애물 생성 (토관 또는 몬스터)
-        function spawnObstacle() {
-            // 마지막 장애물과의 거리 확인
-            let lastObsX = canvas.width;
-            if (obstacles.length > 0) {
-                lastObsX = obstacles[obstacles.length - 1].x;
-            }
-
-            // 화면에 장애물이 너무 많지 않고, 마지막 장애물과 충분한 거리(최소 250px)가 있을 때만 생성
-            if (obstacles.length < 3 && (canvas.width - lastObsX) > 250) {
-                // 프레임에 맞춰 확률적으로 생성
-                if (frame % 50 === 0 && Math.random() < 0.7) {
-                    
-                    // 60% 확률로 몬스터, 40% 확률로 토관 생성
-                    if (Math.random() < 0.6) {
-                        // --- 몬스터 생성 ---
-                        obstacles
+                    ctx.fill(); ctx.strokeStyle = 'black'; ctx.
