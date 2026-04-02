@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마리오 점프 게임 🍄</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #5C94FC; /* 마리오 하늘색 */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+        h1 { color: white; text-shadow: 2px 2px 0 #000; margin-bottom: 10px; }
+        #game-wrapper {
+            position: relative;
+        }
+        canvas {
+            background-color: #5C94FC;
+            border-bottom: 40px solid #c84c0c; /* 벽돌 바닥 느낌 */
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border-radius: 5px 5px 0 0;
+            display: block;
+        }
+        /* 바닥 무늬 추가 */
+        #game-wrapper::after {
+            content: '';
+            position: absolute;
+            bottom: -40px;
+            left: 0;
+            width: 100%;
+            height: 40px;
+            background-image: linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000), 
+                              linear-gradient(45deg, #000 25%, transparent 25%, transparent 75%, #000 75%, #000);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            opacity: 0.1;
+            pointer-events: none;
+        }
+        #scoreBoard {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 0 #000;
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 10;
+        }
+        #gameOverScreen h2 { font-size: 40px; margin: 0 0 20px 0; color: #ffeb3b; text-shadow: 2px 2px 0 #000;}
+        #restartBtn {
+            padding: 10px 30px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            background-color: #e52521; /* 마리오 레드 */
+            color: white;
+            border: 2px solid white;
+            border-radius: 5px;
+            transition: transform 0.1s;
+        }
+        #restartBtn:active { transform: scale(0.95); }
+        .instructions { margin-top: 20px; color: white; font-weight: bold; text-shadow: 1px 1px 0 #000;}
+    </style>
+</head>
+<body>
+
+    <h1>점프 게임 🍄</h1>
+    
+    <div id="game-wrapper">
+        <div id="scoreBoard">점수: <span id="score">0</span></div>
+        <canvas id="gameCanvas" width="800" height="300"></canvas>
+        
+        <div id="gameOverScreen">
+            <h2>게임 오버!</h2>
+            <button id="restartBtn" onclick="resetGame()">다시 하기</button>
+        </div>
+    </div>
+    
+    <div class="instructions">
+        [스페이스바] 또는 [마우스 클릭]으로 점프하세요!
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+
+        // 게임 물리 및 설정
+        let frame = 0;
+        let score = 0;
+        let gameSpeed = 6;
+        let isGameOver = false;
+        let animationId;
+
+        // 플레이어 (마리오)
+        const player = {
+            x: 50,
+            y: 200,
+            width: 30,
+            height: 40,
+            dy: 0,
+            jumpPower: -12,
+            gravity: 0.6,
+            grounded: false
+        };
+
+        // 장애물 (토관)
+        let obstacles = [];
+
+        function drawPlayer() {
+            // 간단한 도트 느낌의 마리오 그리기
+            const x = player.x;
+            const y = player.y;
+            const w = player.width;
+            const h = player.height;
+
+            // 모자 (빨강)
+            ctx.fillStyle = '#e52521';
+            ctx.fillRect(x, y, w, h * 0.3);
+            ctx.fillRect(x + w, y + h * 0.1, w * 0.3, h * 0.1); // 모자 챙
+
+            // 얼굴 (살구색)
+            ctx.fillStyle = '#ffcca6';
+            ctx.fillRect(x, y + h * 0.3, w, h * 0.3);
+
+            // 콧수염
+            ctx.fillStyle = 'black';
+            ctx.fillRect(x + w * 0.5, y + h * 0.45, w * 0.6, h * 0.1);
+
+            // 멜빵바지 (파랑)
+            ctx.fillStyle = '#00439c';
+            ctx.fillRect(x, y + h * 0.6, w, h * 0.4);
+
+            // 팔 (빨강)
+            ctx.fillStyle = '#e52521';
+            ctx.fillRect(x - w * 0.2, y + h * 0.6, w * 0.3, h * 0.2);
+        }
+
+        function drawObstacles() {
+            for (let i = 0; i < obstacles.length; i++) {
+                let obs = obstacles[i];
+                obs.x -= gameSpeed; // 왼쪽으로 이동
+
+                // 토관 그리기
+                ctx.fillStyle = '#00a800'; // 토관 초록색
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                
+                // 토관 입구 (조금 더 넓게)
+                ctx.fillStyle = '#00a800';
+                ctx.fillRect(obs.x - 5, obs.y, obs.width + 10, 20);
+
+                // 토관 테두리선
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(obs.x, obs.y, obs.width, obs.height);
+                ctx.strokeRect(obs.x - 5, obs.y, obs.width + 10, 20);
+                
+                // 토관 하이라이트 (입체감)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.fillRect(obs.x + 5, obs.y, 5, obs.height);
+
+                // 충돌 검사 (AABB)
+                if (player.x < obs.x + obs.width &&
+                    player.x + player.width > obs.x &&
+                    player.y < obs.y + obs.height &&
+                    player.y + player.height > obs.y) {
+                    isGameOver = true;
+                }
+            }
+
+            // 화면 밖으로 나간 토관 제거 및 점수 획득
+            if (obstacles.length > 0 && obstacles[0].x + obstacles[0].width < 0) {
+                obstacles.shift();
+                score += 100;
+                scoreElement.innerText = score;
+                // 점수가 오를수록 속도 약간씩 증가
+                if (score % 500 === 0) gameSpeed += 0.5;
+            }
+        }
+
+        function spawnObstacle() {
+            // 프레임에 맞춰 무작위로 토관 생성
+            if (frame % 90 === 0 || (frame % 60 === 0 && Math.random() < 0.3)) {
+                let minHeight = 30;
+                let maxHeight = 80;
+                let height = Math.floor(Math.random() * (maxHeight - minHeight + 1) + minHeight);
+                
+                // 이전 토관과 너무 가깝지 않게 조정
+                if (obstacles.length === 0 || canvas.width - obstacles[obstacles.length - 1].x > 200) {
+                    obstacles.push({
+                        x: canvas.width,
+                        y: canvas.height - height,
+                        width: 40,
+                        height: height
+                    });
+                }
+            }
+        }
+
+        function drawClouds() {
+            // 배경 장식용 구름
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            let cloudX1 = (canvas.width - (frame * 0.5) % (canvas.width + 200)) + 100;
+            let cloudX2 = (canvas.width - (frame * 0.3) % (canvas.width + 300)) + 400;
+
+            // 구름 1
+            ctx.fillRect(cloudX1, 50, 60, 20);
+            ctx.fillRect(cloudX1 + 10, 40, 40, 40);
+            // 구름 2
+            ctx.fillRect(cloudX2, 80, 80, 25);
+            ctx.fillRect(cloudX2 + 15, 65, 50, 50);
+        }
+
+        function updatePlayer() {
+            // 중력 적용
+            player.y += player.dy;
+            
+            // 바닥 충돌 검사
+            if (player.y + player.height >= canvas.height) {
+                player.y = canvas.height - player.height;
+                player.dy = 0;
+                player.grounded = true;
+            } else {
+                player.dy += player.gravity; // 공중에 있으면 중력 가속도 추가
+                player.grounded = false;
+            }
+        }
+
+        function jump() {
+            if (player.grounded && !isGameOver) {
+                player.dy = player.jumpPower;
+                player.grounded = false;
+            }
+        }
+
+        // 입력 이벤트 리스너
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                jump();
+            }
+        });
+        
+        // 캔버스 클릭 시에도 점프 가능 (모바일 호환)
+        canvas.addEventListener('mousedown', jump);
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            jump();
+        });
+
+        // 게임 메인 루프
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawClouds();
+            updatePlayer();
+            drawPlayer();
+            
+            spawnObstacle();
+            drawObstacles();
+
+            frame++;
+
+            if (!isGameOver) {
+                animationId = requestAnimationFrame(animate);
+            } else {
+                gameOverScreen.style.display = 'flex';
+            }
+        }
+
+        // 게임 초기화 및 재시작
+        function resetGame() {
+            player.y = 200;
+            player.dy = 0;
+            obstacles = [];
+            score = 0;
+            frame = 0;
+            gameSpeed = 6;
+            scoreElement.innerText = score;
+            isGameOver = false;
+            gameOverScreen.style.display = 'none';
+            cancelAnimationFrame(animationId);
+            animate();
+        }
+
+        // 게임 최초 실행
+        animate();
+    </script>
+</body>
+</html>
